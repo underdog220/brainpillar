@@ -1,0 +1,122 @@
+package com.brainpillar.watch
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.union
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.dp
+import androidx.wear.compose.material3.MaterialTheme
+import com.brainpillar.watch.architecture.simulator.debug.SimulatorDebugOverlay
+import com.brainpillar.watch.feature.hints.model.WatchHintUiState
+import com.brainpillar.watch.feature.hints.ui.HintCardScreen
+import com.brainpillar.watch.architecture.simulator.CapturePhoto
+import com.brainpillar.watch.architecture.simulator.FinishProject
+import com.brainpillar.watch.architecture.simulator.PauseRecording
+import com.brainpillar.watch.architecture.simulator.ResumeRecording
+import com.brainpillar.watch.architecture.simulator.NetworkMode
+import com.brainpillar.watch.architecture.simulator.NetworkModeChanged
+import com.brainpillar.watch.architecture.simulator.SimulatorEngine
+import com.brainpillar.watch.architecture.simulator.SimulatorState
+import com.brainpillar.watch.architecture.simulator.StartProject
+import com.brainpillar.watch.architecture.simulator.StartRecording
+import com.brainpillar.watch.architecture.simulator.TranscriptionUpdated
+import com.brainpillar.watch.architecture.simulator.adapter.SimulatorToWatchHintMapper
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // Minimal demo integration: run one domain workflow in the simulator core
+        // and map its last emitted hint to the existing Hint UI.
+        val engine = SimulatorEngine()
+        var simState = SimulatorState()
+        val now = System.currentTimeMillis()
+        var uiState: WatchHintUiState = WatchHintUiState.Empty
+
+        val events = listOf(
+            StartProject(projectId = "demo-project", timestampUtcMillis = now),
+            StartRecording(timestampUtcMillis = now + 1),
+            CapturePhoto(markerId = "M1", timestampUtcMillis = now + 2),
+            PauseRecording(timestampUtcMillis = now + 3),
+            NetworkModeChanged(mode = NetworkMode.Offline, timestampUtcMillis = now + 3),
+            TranscriptionUpdated(chunkText = "Kurzer Transkript-Chunk", timestampUtcMillis = now + 4),
+            ResumeRecording(timestampUtcMillis = now + 4),
+            FinishProject(timestampUtcMillis = now + 5)
+        )
+
+        val allWarnings = mutableListOf<String>()
+        var lastEventLabel = "none"
+
+        for (event in events) {
+            lastEventLabel = event::class.simpleName ?: "Event"
+            val result = engine.transition(simState, event)
+            simState = result.newState
+            uiState = SimulatorToWatchHintMapper.effectsToUiState(result.effects)
+            allWarnings += result.warnings
+        }
+
+        setContent {
+            MaterialTheme {
+                Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                    // Make main content slightly more dominant.
+                    HintCardScreen(
+                        state = uiState,
+                        modifier = Modifier.scale(1.07f)
+                    )
+                    if (BuildConfig.DEBUG) {
+                        val hint = (uiState as? WatchHintUiState.Content)?.hint
+                        val title = hint?.title
+                        val subtitle = hint?.subtitle
+
+                        val hintLine = when {
+                            !title.isNullOrBlank() && !subtitle.isNullOrBlank() ->
+                                "$title • $subtitle"
+                            !title.isNullOrBlank() ->
+                                title
+                            !subtitle.isNullOrBlank() ->
+                                subtitle
+                            allWarnings.isNotEmpty() ->
+                                "Warnings=${allWarnings.size}"
+                            else ->
+                                ""
+                        }
+
+                        val debugLines: List<String> = when (simState.lastNetworkMode) {
+                            NetworkMode.Offline -> listOfNotNull(
+                                "Offline aktiv",
+                                "Stage=${simState.stage} • Last=$lastEventLabel",
+                                hintLine.takeIf { it.isNotBlank() }
+                            )
+                            else -> listOfNotNull(
+                                "Stage=${simState.stage} • Net=${simState.lastNetworkMode}",
+                                "Last=$lastEventLabel",
+                                hintLine.takeIf { it.isNotBlank() }
+                            )
+                        }
+
+                        val insets: androidx.compose.foundation.layout.PaddingValues = WindowInsets.safeDrawing
+                            .union(WindowInsets.navigationBars)
+                            .asPaddingValues()
+                        SimulatorDebugOverlay(
+                            lines = debugLines,
+                            modifier = androidx.compose.ui.Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(insets)
+                                .padding(top = 6.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
