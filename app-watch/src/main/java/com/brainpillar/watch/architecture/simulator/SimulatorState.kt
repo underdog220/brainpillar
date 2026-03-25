@@ -14,6 +14,9 @@ data class SimulatorState(
     val transcriptionChunkCount: Int = 0,
     val lastTranscriptionAtUtc: Long? = null,
     val pendingQueue: List<QueuedAction> = emptyList(),
+    val lastChecklistId: String? = null,
+    val lastEvaluationType: EvaluationType? = null,
+    val photoCount: Int = 0,
     val lastError: String? = null
 ) {
     val hasPendingActions: Boolean get() = pendingQueue.isNotEmpty()

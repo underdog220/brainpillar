@@ -22,7 +22,24 @@ sealed interface SimulatorEffect {
 
     /** Alle gepufferten Aktionen sollen jetzt ausgefuehrt werden (Netzwerk wieder da) */
     data class FlushQueue(val actions: List<QueuedAction>) : SimulatorEffect
+
+    /** Checklisten-Ergebnis: Liste von Pruefpunkten mit Status */
+    data class ChecklistResult(
+        val checklistId: String,
+        val items: List<ChecklistItem>
+    ) : SimulatorEffect
+
+    /** KI-Bewertung angefordert (wird asynchron verarbeitet) */
+    data class AiEvaluationTriggered(
+        val evaluationType: EvaluationType,
+        val contextSummary: String
+    ) : SimulatorEffect
 }
+
+data class ChecklistItem(
+    val label: String,
+    val checked: Boolean
+)
 
 enum class LogLevel {
     DEBUG,

@@ -549,6 +549,199 @@ class SimulatorEngineTest {
         assertFalse(result.newState.hasPendingActions)
     }
 
+    // ===== Phase 9: Checklist & AI-Evaluation Tests =====
+
+    @Test
+    fun checklistRequested_inRecordingActive_emitsChecklistResult() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            projectId = "p1",
+            hasTranscription = true,
+            photoCount = 2,
+            transcriptionChunkCount = 4
+        )
+
+        val result = engine.transition(
+            state, ChecklistRequested(checklistId = "cl-1", timestampUtcMillis = 1000L)
+        )
+
+        assertEquals("cl-1", result.newState.lastChecklistId)
+        val checklist = result.effects.filterIsInstance<SimulatorEffect.ChecklistResult>().single()
+        assertEquals("cl-1", checklist.checklistId)
+        assertTrue(checklist.items.isNotEmpty())
+        // Projekt angelegt: ja, Foto: ja, Transkription: ja
+        assertTrue(checklist.items.first { it.label == "Projekt angelegt" }.checked)
+        assertTrue(checklist.items.first { it.label == "Mindestens 1 Foto" }.checked)
+        assertTrue(checklist.items.first { it.label == "Transkription vorhanden" }.checked)
+        assertTrue(checklist.items.first { it.label == "Mindestens 3 Chunks" }.checked)
+        // Nicht abgeschlossen
+        assertFalse(checklist.items.first { it.label == "Projekt abgeschlossen" }.checked)
+        // Hint
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("/"))
+    }
+
+    @Test
+    fun checklistRequested_inCompleted_showsAllDone() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Completed,
+            projectId = "p1",
+            hasTranscription = true,
+            photoCount = 1,
+            transcriptionChunkCount = 5
+        )
+
+        val result = engine.transition(
+            state, ChecklistRequested(checklistId = "cl-2", timestampUtcMillis = 1000L)
+        )
+
+        val checklist = result.effects.filterIsInstance<SimulatorEffect.ChecklistResult>().single()
+        assertTrue(checklist.items.first { it.label == "Projekt abgeschlossen" }.checked)
+    }
+
+    @Test
+    fun checklistRequested_inIdle_isInvalid() {
+        val state = SimulatorState(stage = SimulatorStage.Idle)
+
+        val result = engine.transition(
+            state, ChecklistRequested(checklistId = "cl-3", timestampUtcMillis = 1000L)
+        )
+
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.ChecklistResult })
+    }
+
+    @Test
+    fun aiEvaluation_online_triggersEvaluation() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Completed,
+            projectId = "p1",
+            lastNetworkMode = NetworkMode.Online,
+            hasTranscription = true,
+            photoCount = 3,
+            transcriptionChunkCount = 5
+        )
+
+        val result = engine.transition(
+            state, AiEvaluationRequested(
+                evaluationType = EvaluationType.QUALITY,
+                timestampUtcMillis = 1000L
+            )
+        )
+
+        assertEquals(EvaluationType.QUALITY, result.newState.lastEvaluationType)
+        val triggered = result.effects.filterIsInstance<SimulatorEffect.AiEvaluationTriggered>().single()
+        assertEquals(EvaluationType.QUALITY, triggered.evaluationType)
+        assertTrue(triggered.contextSummary.contains("p1"))
+        assertTrue(triggered.contextSummary.contains("Fotos: 3"))
+        // Hint
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.title.contains("Qualitaet"))
+    }
+
+    @Test
+    fun aiEvaluation_completeness_triggersCorrectType() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Online
+        )
+
+        val result = engine.transition(
+            state, AiEvaluationRequested(
+                evaluationType = EvaluationType.COMPLETENESS,
+                timestampUtcMillis = 1000L
+            )
+        )
+
+        val triggered = result.effects.filterIsInstance<SimulatorEffect.AiEvaluationTriggered>().single()
+        assertEquals(EvaluationType.COMPLETENESS, triggered.evaluationType)
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.title.contains("Vollstaendigkeit"))
+    }
+
+    @Test
+    fun aiEvaluation_offline_blocksWithWarning() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Completed,
+            lastNetworkMode = NetworkMode.Offline
+        )
+
+        val result = engine.transition(
+            state, AiEvaluationRequested(
+                evaluationType = EvaluationType.QUALITY,
+                timestampUtcMillis = 1000L
+            )
+        )
+
+        assertFalse(result.effects.any { it is SimulatorEffect.AiEvaluationTriggered })
+        assertTrue(result.warnings.isNotEmpty())
+        assertEquals("AI evaluation requires network", result.newState.lastError)
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.isStale)
+        assertTrue(hint.subtitle!!.contains("Offline"))
+    }
+
+    @Test
+    fun aiEvaluation_inIdle_isInvalid() {
+        val state = SimulatorState(stage = SimulatorStage.Idle)
+
+        val result = engine.transition(
+            state, AiEvaluationRequested(timestampUtcMillis = 1000L)
+        )
+
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.AiEvaluationTriggered })
+    }
+
+    @Test
+    fun aiEvaluation_inProjectRunning_isInvalid() {
+        val state = SimulatorState(
+            stage = SimulatorStage.ProjectRunning,
+            lastNetworkMode = NetworkMode.Online
+        )
+
+        val result = engine.transition(
+            state, AiEvaluationRequested(timestampUtcMillis = 1000L)
+        )
+
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.AiEvaluationTriggered })
+    }
+
+    @Test
+    fun startProject_resetsChecklistAndEvaluation() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Idle,
+            lastChecklistId = "old",
+            lastEvaluationType = EvaluationType.QUALITY,
+            photoCount = 5
+        )
+
+        val result = engine.transition(state, StartProject("p2", timestampUtcMillis = 1000L))
+
+        assertNull(result.newState.lastChecklistId)
+        assertNull(result.newState.lastEvaluationType)
+        assertEquals(0, result.newState.photoCount)
+    }
+
+    @Test
+    fun capturePhoto_incrementsPhotoCount() {
+        var state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true
+        )
+
+        val r1 = engine.transition(state, CapturePhoto("M1", 100L))
+        state = r1.newState
+        assertEquals(1, state.photoCount)
+
+        val r2 = engine.transition(state, CapturePhoto("M2", 200L))
+        state = r2.newState
+        assertEquals(2, state.photoCount)
+    }
+
     @Test
     fun multipleInvalidEvents_accumulateWarningsInCaller() {
         val initial = SimulatorState(stage = SimulatorStage.Idle)

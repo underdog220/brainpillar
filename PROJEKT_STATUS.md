@@ -1,17 +1,16 @@
 # BrainPillar - Projektstatus
 
 ## Aktueller Stand
-Wear OS Smartwatch-App mit Architecture Simulator in Phase 8. Offline/Online/Hybrid-Logik mit Queueing implementiert: Aktionen (Foto-Upload, Transkript-Sync, Export) werden bei Offline gepuffert und bei Netzwerk-Rueckkehr automatisch geflusht. Queue-Anzeige im Debug-Overlay.
+Wear OS Smartwatch-App mit Architecture Simulator in Phase 9. Checklist- und KI-Bewertungs-Events implementiert. ChecklistRequested generiert dynamische Checkliste aus State, AiEvaluationRequested triggert KI-Bewertung (Quality/Completeness/Summary) mit Offline-Blockierung. photoCount wird getrackt.
 
 ## Aktuelle Version / Phase
-Phase 8 (Offline/Online/Hybrid-Logik)
+Phase 9 (Checklist & AI-Evaluation Events)
 
 ## Naechste geplante Stufe
-Phase 9 - Checklist & AI-Evaluation Events
+Phase 10 - Export-Pipeline & Retry-Logik
 
 ## Offene Punkte
 - Unterschiedliche Hint-Templates pro HintType im UI
-- ChecklistRequested und AiEvaluationRequested Events noch nicht modelliert
 - Export-Pipeline und Retry-Logik ausstehend
 - Backend-Integration noch nicht begonnen
 - Debug/Logging Panopticor-Schnittstelle (geplant)

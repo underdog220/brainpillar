@@ -39,12 +39,35 @@ data class NetworkModeChanged(
     override val timestampUtcMillis: Long
 ) : SimulatorEvent
 
-/**
- * Placeholder for later phases; included early so the simulator API already supports
- * transcription events without forcing UI/Android dependencies.
- */
 data class TranscriptionUpdated(
     val chunkText: String,
     override val timestampUtcMillis: Long
 ) : SimulatorEvent
+
+/**
+ * Checklisten-Pruefung anfordern. Typisch: Nutzer tippt auf Watch
+ * um den aktuellen Fortschritt zu pruefen.
+ */
+data class ChecklistRequested(
+    val checklistId: String,
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
+/**
+ * KI-Bewertung anfordern. Typisch: Nach Projektabschluss oder
+ * auf Nutzer-Anforderung fuer Qualitaetsbewertung.
+ */
+data class AiEvaluationRequested(
+    val evaluationType: EvaluationType = EvaluationType.QUALITY,
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
+enum class EvaluationType {
+    /** Qualitaetsbewertung der Aufnahme/Dokumentation */
+    QUALITY,
+    /** Vollstaendigkeitspruefung */
+    COMPLETENESS,
+    /** Zusammenfassung des Projekts */
+    SUMMARY
+}
 

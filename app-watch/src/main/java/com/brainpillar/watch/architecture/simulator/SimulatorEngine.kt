@@ -42,6 +42,33 @@ class SimulatorEngine {
         }
     }
 
+    /**
+     * Baut eine Checkliste basierend auf dem aktuellen Projekt-State.
+     */
+    private fun buildChecklist(state: SimulatorState): List<ChecklistItem> = listOf(
+        ChecklistItem("Projekt angelegt", state.projectId != null),
+        ChecklistItem("Aufnahme gestartet", state.stage != SimulatorStage.ProjectRunning),
+        ChecklistItem("Mindestens 1 Foto", state.photoCount > 0),
+        ChecklistItem("Transkription vorhanden", state.hasTranscription),
+        ChecklistItem("Mindestens 3 Chunks", state.transcriptionChunkCount >= 3),
+        ChecklistItem("Projekt abgeschlossen", state.stage == SimulatorStage.Completed),
+        ChecklistItem("Alle Uploads synchronisiert", !state.hasPendingActions)
+    )
+
+    /**
+     * Baut eine Kontext-Zusammenfassung fuer die KI-Bewertung.
+     */
+    private fun buildEvaluationContext(state: SimulatorState): String = buildString {
+        append("Projekt: ${state.projectId ?: "unbekannt"}")
+        append(", Stage: ${state.stage}")
+        append(", Fotos: ${state.photoCount}")
+        append(", Transkript-Chunks: ${state.transcriptionChunkCount}")
+        append(", Netzwerk: ${state.lastNetworkMode}")
+        if (state.hasPendingActions) {
+            append(", Wartend: ${state.pendingQueue.size}")
+        }
+    }
+
     fun transition(state: SimulatorState, event: SimulatorEvent): SimulationResult {
         val effects = mutableListOf<SimulatorEffect>()
         val logs = mutableListOf<String>()
@@ -97,6 +124,9 @@ class SimulatorEngine {
                         transcriptionChunkCount = 0,
                         lastTranscriptionAtUtc = null,
                         pendingQueue = emptyList(),
+                        lastChecklistId = null,
+                        lastEvaluationType = null,
+                        photoCount = 0,
                         lastError = null
                     )
                 }
@@ -186,6 +216,7 @@ class SimulatorEngine {
                             )
                             state.copy(
                                 lastPhotoMarkerId = event.markerId,
+                                photoCount = state.photoCount + 1,
                                 pendingQueue = state.pendingQueue + queued,
                                 lastError = null
                             )
@@ -197,6 +228,7 @@ class SimulatorEngine {
                             )
                             state.copy(
                                 lastPhotoMarkerId = event.markerId,
+                                photoCount = state.photoCount + 1,
                                 lastError = null
                             )
                         }
@@ -374,6 +406,96 @@ class SimulatorEngine {
                     SimulatorStage.ProjectRunning,
                     SimulatorStage.Completed -> {
                         warn("TranscriptionUpdated is not allowed in stage=$currentStage")
+                        state
+                    }
+                }
+            }
+
+            is ChecklistRequested -> {
+                // Erlaubt in allen aktiven Stages (nicht Idle)
+                when (currentStage) {
+                    SimulatorStage.ProjectRunning,
+                    SimulatorStage.RecordingActive,
+                    SimulatorStage.Paused,
+                    SimulatorStage.Completed -> {
+                        log(LogLevel.INFO, "Checklist requested: ${event.checklistId}")
+
+                        // Checkliste basierend auf aktuellem State generieren
+                        val items = buildChecklist(state)
+                        effects += SimulatorEffect.ChecklistResult(
+                            checklistId = event.checklistId,
+                            items = items
+                        )
+
+                        val checkedCount = items.count { it.checked }
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Checkliste",
+                            subtitle = "$checkedCount/${items.size} erledigt"
+                        )
+
+                        state.copy(
+                            lastChecklistId = event.checklistId,
+                            lastError = null
+                        )
+                    }
+
+                    SimulatorStage.Idle -> {
+                        warn("ChecklistRequested is not allowed in stage=$currentStage")
+                        state
+                    }
+                }
+            }
+
+            is AiEvaluationRequested -> {
+                // Erlaubt in RecordingActive, Paused und Completed
+                when (currentStage) {
+                    SimulatorStage.RecordingActive,
+                    SimulatorStage.Paused,
+                    SimulatorStage.Completed -> {
+                        val isOffline = state.lastNetworkMode == NetworkMode.Offline
+                        log(LogLevel.INFO, "AI evaluation requested: ${event.evaluationType}")
+
+                        if (isOffline) {
+                            // Offline: KI-Bewertung nicht moeglich
+                            warn("AiEvaluation nicht moeglich: Offline")
+                            emitHint(
+                                hintType = SimulatorHintType.REMINDER,
+                                title = "KI-Bewertung",
+                                subtitle = "Offline - nicht verfuegbar",
+                                isStale = true
+                            )
+                            state.copy(lastError = "AI evaluation requires network")
+                        } else {
+                            // Online/Hybrid: Bewertung triggern
+                            val contextSummary = buildEvaluationContext(state)
+                            effects += SimulatorEffect.AiEvaluationTriggered(
+                                evaluationType = event.evaluationType,
+                                contextSummary = contextSummary
+                            )
+
+                            val typeLabel = when (event.evaluationType) {
+                                EvaluationType.QUALITY -> "Qualitaet"
+                                EvaluationType.COMPLETENESS -> "Vollstaendigkeit"
+                                EvaluationType.SUMMARY -> "Zusammenfassung"
+                            }
+                            emitHint(
+                                hintType = SimulatorHintType.TOPIC,
+                                title = "KI: $typeLabel",
+                                subtitle = "Bewertung gestartet...",
+                                confidenceLabel = SimulatorConfidenceLabel.PROBABLE
+                            )
+
+                            state.copy(
+                                lastEvaluationType = event.evaluationType,
+                                lastError = null
+                            )
+                        }
+                    }
+
+                    SimulatorStage.Idle,
+                    SimulatorStage.ProjectRunning -> {
+                        warn("AiEvaluationRequested is not allowed in stage=$currentStage")
                         state
                     }
                 }

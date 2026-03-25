@@ -30,6 +30,9 @@ import com.brainpillar.watch.architecture.simulator.SimulatorState
 import com.brainpillar.watch.architecture.simulator.StartProject
 import com.brainpillar.watch.architecture.simulator.StartRecording
 import com.brainpillar.watch.architecture.simulator.TranscriptionUpdated
+import com.brainpillar.watch.architecture.simulator.ChecklistRequested
+import com.brainpillar.watch.architecture.simulator.AiEvaluationRequested
+import com.brainpillar.watch.architecture.simulator.EvaluationType
 import com.brainpillar.watch.architecture.simulator.adapter.SimulatorToWatchHintMapper
 
 class MainActivity : ComponentActivity() {
@@ -56,11 +59,14 @@ class MainActivity : ComponentActivity() {
             // Offline: Foto + Transcription werden gequeuet
             CapturePhoto(markerId = "M2", timestampUtcMillis = now + 15_000),
             TranscriptionUpdated(chunkText = "Deckenhoehe messen und dokumentieren", timestampUtcMillis = now + 18_000),
-            // Projekt abschliessen waehrend Offline -> Export gequeuet
+            // Checkliste waehrend Aufnahme pruefen
+            ChecklistRequested(checklistId = "baucheck-1", timestampUtcMillis = now + 19_000),
             PauseRecording(timestampUtcMillis = now + 20_000),
             FinishProject(timestampUtcMillis = now + 22_000),
             // Netzwerk kehrt zurueck -> Queue wird geflusht
-            NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = now + 30_000)
+            NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = now + 30_000),
+            // Phase 9: KI-Bewertung nach Abschluss (online)
+            AiEvaluationRequested(evaluationType = EvaluationType.QUALITY, timestampUtcMillis = now + 32_000)
         )
 
         val allWarnings = mutableListOf<String>()
