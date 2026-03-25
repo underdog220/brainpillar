@@ -8,7 +8,6 @@ sealed interface SimulatorEffect {
     data class Log(val level: LogLevel, val message: String) : SimulatorEffect
     data class Warning(val message: String) : SimulatorEffect
 
-    // For later integration: Adapter maps these to Watch UI hints.
     data class EmitHint(
         val hintType: SimulatorHintType,
         val title: String,
@@ -17,6 +16,12 @@ sealed interface SimulatorEffect {
         val isStale: Boolean,
         val ttlSec: Int?
     ) : SimulatorEffect
+
+    /** Aktion wird offline gepuffert statt sofort ausgefuehrt */
+    data class EnqueueAction(val action: QueuedAction) : SimulatorEffect
+
+    /** Alle gepufferten Aktionen sollen jetzt ausgefuehrt werden (Netzwerk wieder da) */
+    data class FlushQueue(val actions: List<QueuedAction>) : SimulatorEffect
 }
 
 enum class LogLevel {

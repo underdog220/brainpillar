@@ -96,6 +96,7 @@ class SimulatorEngine {
                         hasTranscription = false,
                         transcriptionChunkCount = 0,
                         lastTranscriptionAtUtc = null,
+                        pendingQueue = emptyList(),
                         lastError = null
                     )
                 }
@@ -162,21 +163,43 @@ class SimulatorEngine {
                 when (currentStage) {
                     SimulatorStage.RecordingActive,
                     SimulatorStage.Paused -> {
-                        // Photo capture can happen during active recording or immediately before/after pause.
                         log(LogLevel.INFO, "Photo captured (markerId=${event.markerId ?: "null"})")
+                        val isOffline = state.lastNetworkMode == NetworkMode.Offline
                         val subtitle = event.markerId
                             ?.takeIf { it.isNotBlank() }
                             ?.let { markerId -> "Marker: ${markerId.take(6)}" }
                             ?: "Foto markiert"
-                        emitHint(
-                            hintType = SimulatorHintType.REMINDER,
-                            title = "Foto gespeichert",
-                            subtitle = subtitle
-                        )
-                        state.copy(
-                            lastPhotoMarkerId = event.markerId,
-                            lastError = null
-                        )
+
+                        if (isOffline) {
+                            // Offline: Foto lokal speichern, Upload queuen
+                            val queued = QueuedAction(
+                                actionType = QueuedActionType.PHOTO_UPLOAD,
+                                label = "Foto-Upload: ${event.markerId ?: "ohne Marker"}",
+                                payload = mapOf("markerId" to (event.markerId ?: "")),
+                                queuedAtUtcMillis = event.timestampUtcMillis
+                            )
+                            effects += SimulatorEffect.EnqueueAction(queued)
+                            emitHint(
+                                hintType = SimulatorHintType.REMINDER,
+                                title = "Foto gespeichert",
+                                subtitle = "$subtitle (Upload wartet)"
+                            )
+                            state.copy(
+                                lastPhotoMarkerId = event.markerId,
+                                pendingQueue = state.pendingQueue + queued,
+                                lastError = null
+                            )
+                        } else {
+                            emitHint(
+                                hintType = SimulatorHintType.REMINDER,
+                                title = "Foto gespeichert",
+                                subtitle = subtitle
+                            )
+                            state.copy(
+                                lastPhotoMarkerId = event.markerId,
+                                lastError = null
+                            )
+                        }
                     }
 
                     SimulatorStage.Idle,
@@ -195,27 +218,58 @@ class SimulatorEngine {
                     SimulatorStage.Paused -> {
                         log(LogLevel.INFO, "Project finished")
                         val isOffline = state.lastNetworkMode == NetworkMode.Offline
-                        val subtitle = when {
-                            isOffline && state.hasTranscription ->
-                                "Offline+Transkript"
-                            isOffline ->
-                                "Offline-Export"
-                            state.hasTranscription ->
-                                "Export mit Transkript"
-                            else ->
-                                "Export bereit"
+                        val isHybrid = state.lastNetworkMode == NetworkMode.Hybrid
+
+                        if (isOffline || isHybrid) {
+                            // Offline/Hybrid: Export queuen statt sofort ausfuehren
+                            val queued = QueuedAction(
+                                actionType = QueuedActionType.EXPORT,
+                                label = "Export: ${state.projectId ?: "unbekannt"}",
+                                payload = mapOf(
+                                    "projectId" to (state.projectId ?: ""),
+                                    "hasTranscription" to state.hasTranscription.toString()
+                                ),
+                                queuedAtUtcMillis = event.timestampUtcMillis
+                            )
+                            effects += SimulatorEffect.EnqueueAction(queued)
+                            val pendingCount = state.pendingQueue.size + 1
+                            val subtitle = when {
+                                isOffline && state.hasTranscription ->
+                                    "Offline+Transkript (Export gequeuet, $pendingCount wartend)"
+                                isOffline ->
+                                    "Offline-Export gequeuet ($pendingCount wartend)"
+                                state.hasTranscription ->
+                                    "Hybrid: Export gequeuet ($pendingCount wartend)"
+                                else ->
+                                    "Hybrid: Export gequeuet ($pendingCount wartend)"
+                            }
+                            emitHint(
+                                hintType = SimulatorHintType.FALLBACK,
+                                title = "Abgeschlossen",
+                                subtitle = subtitle,
+                                isStale = true
+                            )
+                            state.copy(
+                                stage = SimulatorStage.Completed,
+                                isRecording = false,
+                                pendingQueue = state.pendingQueue + queued,
+                                lastError = null
+                            )
+                        } else {
+                            val subtitle = if (state.hasTranscription)
+                                "Export mit Transkript" else "Export bereit"
+                            emitHint(
+                                hintType = SimulatorHintType.FALLBACK,
+                                title = "Abgeschlossen",
+                                subtitle = subtitle,
+                                isStale = false
+                            )
+                            state.copy(
+                                stage = SimulatorStage.Completed,
+                                isRecording = false,
+                                lastError = null
+                            )
                         }
-                        emitHint(
-                            hintType = SimulatorHintType.FALLBACK,
-                            title = "Abgeschlossen",
-                            subtitle = subtitle,
-                            isStale = isOffline
-                        )
-                        state.copy(
-                            stage = SimulatorStage.Completed,
-                            isRecording = false,
-                            lastError = null
-                        )
                     }
 
                     SimulatorStage.Idle,
@@ -229,17 +283,42 @@ class SimulatorEngine {
             is NetworkModeChanged -> {
                 log(LogLevel.DEBUG, "Network mode changed: ${event.mode}")
                 val wasOffline = state.lastNetworkMode == NetworkMode.Offline
+                val wasHybrid = state.lastNetworkMode == NetworkMode.Hybrid
                 val nowOffline = event.mode == NetworkMode.Offline
-                // Kleiner Reminder nur beim Uebergang zu Offline (nicht bei jedem erneuten Offline-Event).
-                if (nowOffline && !wasOffline) {
-                    emitHint(
-                        hintType = SimulatorHintType.REMINDER,
-                        title = "Offline",
-                        subtitle = "Verbindung eingeschraenkt"
-                    )
+                val nowOnline = event.mode == NetworkMode.Online
+
+                when {
+                    // Uebergang zu Offline
+                    nowOffline && !wasOffline -> {
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Offline",
+                            subtitle = "Verbindung eingeschraenkt"
+                        )
+                    }
+                    // Rueckkehr zu Online: Queue flushen
+                    nowOnline && (wasOffline || wasHybrid) && state.hasPendingActions -> {
+                        log(LogLevel.INFO, "Online: ${state.pendingQueue.size} gepufferte Aktionen werden ausgefuehrt")
+                        effects += SimulatorEffect.FlushQueue(state.pendingQueue)
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Online",
+                            subtitle = "${state.pendingQueue.size} Aktionen synchronisiert"
+                        )
+                    }
+                    // Rueckkehr zu Online ohne Queue
+                    nowOnline && (wasOffline || wasHybrid) -> {
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Online",
+                            subtitle = "Verbindung wiederhergestellt"
+                        )
+                    }
                 }
                 state.copy(
-                    lastNetworkMode = event.mode
+                    lastNetworkMode = event.mode,
+                    // Queue leeren bei Online-Rueckkehr
+                    pendingQueue = if (nowOnline) emptyList() else state.pendingQueue
                 )
             }
 
@@ -249,6 +328,7 @@ class SimulatorEngine {
                     SimulatorStage.Paused -> {
                         val chunkCount = state.transcriptionChunkCount + 1
                         val isStale = state.isTranscriptionStale(event.timestampUtcMillis)
+                        val isOffline = state.lastNetworkMode == NetworkMode.Offline
                         log(LogLevel.DEBUG, "Transcription updated (len=${event.chunkText.length}, chunk=#$chunkCount)")
 
                         // Hint-Typ aus Chunk-Inhalt ableiten (simuliert)
@@ -256,19 +336,36 @@ class SimulatorEngine {
                         val confidence = if (event.chunkText.length >= 20)
                             SimulatorConfidenceLabel.PROBABLE else SimulatorConfidenceLabel.POSSIBLE
 
+                        // Hint wird immer lokal angezeigt (auch offline)
+                        val subtitleSuffix = if (isOffline) " (lokal)" else ""
                         emitHint(
                             hintType = parsed.hintType,
                             title = parsed.title,
-                            subtitle = parsed.subtitle,
+                            subtitle = (parsed.subtitle ?: "") + subtitleSuffix,
                             confidenceLabel = confidence,
                             isStale = isStale,
                             ttlSec = TRANSCRIPTION_HINT_TTL_SEC
                         )
 
+                        // Offline: Transkript-Sync queuen
+                        val newQueue = if (isOffline) {
+                            val queued = QueuedAction(
+                                actionType = QueuedActionType.TRANSCRIPTION_SYNC,
+                                label = "Transkript-Sync: Chunk #$chunkCount",
+                                payload = mapOf("chunkText" to event.chunkText.take(100)),
+                                queuedAtUtcMillis = event.timestampUtcMillis
+                            )
+                            effects += SimulatorEffect.EnqueueAction(queued)
+                            state.pendingQueue + queued
+                        } else {
+                            state.pendingQueue
+                        }
+
                         state.copy(
                             hasTranscription = true,
                             transcriptionChunkCount = chunkCount,
                             lastTranscriptionAtUtc = event.timestampUtcMillis,
+                            pendingQueue = newQueue,
                             lastError = null
                         )
                     }

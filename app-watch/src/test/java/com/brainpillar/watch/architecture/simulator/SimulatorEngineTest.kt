@@ -337,6 +337,218 @@ class SimulatorEngineTest {
         assertTrue(result.effects.any { it is SimulatorEffect.Log })
     }
 
+    // ===== Phase 8: Offline/Online/Hybrid Queue-Tests =====
+
+    @Test
+    fun capturePhoto_offline_queuesPhotoUpload() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Offline
+        )
+
+        val result = engine.transition(state, CapturePhoto(markerId = "M1", timestampUtcMillis = 1000L))
+
+        assertTrue(result.newState.hasPendingActions)
+        assertEquals(1, result.newState.pendingQueue.size)
+        assertEquals(QueuedActionType.PHOTO_UPLOAD, result.newState.pendingQueue.first().actionType)
+        assertTrue(result.effects.any { it is SimulatorEffect.EnqueueAction })
+        // Hint wird trotzdem emittiert
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("Upload wartet"))
+    }
+
+    @Test
+    fun capturePhoto_online_doesNotQueue() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Online
+        )
+
+        val result = engine.transition(state, CapturePhoto(markerId = "M1", timestampUtcMillis = 1000L))
+
+        assertFalse(result.newState.hasPendingActions)
+        assertFalse(result.effects.any { it is SimulatorEffect.EnqueueAction })
+    }
+
+    @Test
+    fun finishProject_offline_queuesExport() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Offline,
+            hasTranscription = true
+        )
+
+        val result = engine.transition(state, FinishProject(timestampUtcMillis = 1000L))
+
+        assertEquals(SimulatorStage.Completed, result.newState.stage)
+        assertTrue(result.newState.hasPendingActions)
+        assertEquals(QueuedActionType.EXPORT, result.newState.pendingQueue.first().actionType)
+        assertTrue(result.effects.any { it is SimulatorEffect.EnqueueAction })
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.isStale)
+        assertTrue(hint.subtitle!!.contains("gequeuet"))
+    }
+
+    @Test
+    fun finishProject_hybrid_queuesExport() {
+        val state = SimulatorState(
+            stage = SimulatorStage.ProjectRunning,
+            lastNetworkMode = NetworkMode.Hybrid
+        )
+
+        val result = engine.transition(state, FinishProject(timestampUtcMillis = 1000L))
+
+        assertEquals(SimulatorStage.Completed, result.newState.stage)
+        assertTrue(result.newState.hasPendingActions)
+        assertEquals(QueuedActionType.EXPORT, result.newState.pendingQueue.first().actionType)
+    }
+
+    @Test
+    fun finishProject_online_doesNotQueue() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Online
+        )
+
+        val result = engine.transition(state, FinishProject(timestampUtcMillis = 1000L))
+
+        assertEquals(SimulatorStage.Completed, result.newState.stage)
+        assertFalse(result.newState.hasPendingActions)
+        assertFalse(result.effects.any { it is SimulatorEffect.EnqueueAction })
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertFalse(hint.isStale)
+    }
+
+    @Test
+    fun transcriptionUpdated_offline_queuesSync() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Offline
+        )
+
+        val result = engine.transition(
+            state, TranscriptionUpdated("Offline-Text hier", timestampUtcMillis = 1000L)
+        )
+
+        assertTrue(result.newState.hasPendingActions)
+        assertEquals(QueuedActionType.TRANSCRIPTION_SYNC, result.newState.pendingQueue.first().actionType)
+        // Hint wird trotzdem lokal angezeigt
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("lokal"))
+    }
+
+    @Test
+    fun transcriptionUpdated_online_doesNotQueue() {
+        val state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Online
+        )
+
+        val result = engine.transition(
+            state, TranscriptionUpdated("Online-Text hier", timestampUtcMillis = 1000L)
+        )
+
+        assertFalse(result.newState.hasPendingActions)
+        assertFalse(result.effects.any { it is SimulatorEffect.EnqueueAction })
+    }
+
+    @Test
+    fun networkModeChanged_onlineReturn_flushesQueue() {
+        val queued1 = QueuedAction(QueuedActionType.PHOTO_UPLOAD, "Foto", queuedAtUtcMillis = 100L)
+        val queued2 = QueuedAction(QueuedActionType.EXPORT, "Export", queuedAtUtcMillis = 200L)
+        val state = SimulatorState(
+            stage = SimulatorStage.Completed,
+            lastNetworkMode = NetworkMode.Offline,
+            pendingQueue = listOf(queued1, queued2)
+        )
+
+        val result = engine.transition(
+            state, NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = 1000L)
+        )
+
+        // Queue ist geleert
+        assertFalse(result.newState.hasPendingActions)
+        // FlushQueue-Effect mit beiden Aktionen
+        val flush = result.effects.filterIsInstance<SimulatorEffect.FlushQueue>().single()
+        assertEquals(2, flush.actions.size)
+        // Hint zeigt Synchronisation
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("2 Aktionen"))
+    }
+
+    @Test
+    fun networkModeChanged_onlineReturn_emptyQueue_noFlush() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Completed,
+            lastNetworkMode = NetworkMode.Offline,
+            pendingQueue = emptyList()
+        )
+
+        val result = engine.transition(
+            state, NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = 1000L)
+        )
+
+        assertFalse(result.effects.any { it is SimulatorEffect.FlushQueue })
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("wiederhergestellt"))
+    }
+
+    @Test
+    fun offlineWorkflow_multipleActions_accumulate_thenFlush() {
+        var state = SimulatorState(
+            stage = SimulatorStage.RecordingActive,
+            isRecording = true,
+            lastNetworkMode = NetworkMode.Offline
+        )
+
+        // Foto offline
+        val r1 = engine.transition(state, CapturePhoto(markerId = "M1", timestampUtcMillis = 100L))
+        state = r1.newState
+        assertEquals(1, state.pendingQueue.size)
+
+        // Transcription offline
+        val r2 = engine.transition(state, TranscriptionUpdated("Offline chunk", timestampUtcMillis = 200L))
+        state = r2.newState
+        assertEquals(2, state.pendingQueue.size)
+
+        // Pause + FinishProject offline
+        val r3 = engine.transition(state, PauseRecording(timestampUtcMillis = 300L))
+        state = r3.newState
+        val r4 = engine.transition(state, FinishProject(timestampUtcMillis = 400L))
+        state = r4.newState
+        assertEquals(3, state.pendingQueue.size)
+
+        // Online-Rueckkehr: alles flushen
+        val r5 = engine.transition(state, NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = 500L))
+        state = r5.newState
+        assertFalse(state.hasPendingActions)
+        val flush = r5.effects.filterIsInstance<SimulatorEffect.FlushQueue>().single()
+        assertEquals(3, flush.actions.size)
+        assertEquals(QueuedActionType.PHOTO_UPLOAD, flush.actions[0].actionType)
+        assertEquals(QueuedActionType.TRANSCRIPTION_SYNC, flush.actions[1].actionType)
+        assertEquals(QueuedActionType.EXPORT, flush.actions[2].actionType)
+    }
+
+    @Test
+    fun startProject_resetsQueue() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Idle,
+            pendingQueue = listOf(
+                QueuedAction(QueuedActionType.EXPORT, "Alt", queuedAtUtcMillis = 0L)
+            )
+        )
+
+        val result = engine.transition(state, StartProject("p2", timestampUtcMillis = 1000L))
+
+        assertFalse(result.newState.hasPendingActions)
+    }
+
     @Test
     fun multipleInvalidEvents_accumulateWarningsInCaller() {
         val initial = SimulatorState(stage = SimulatorStage.Idle)

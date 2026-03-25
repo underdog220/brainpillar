@@ -43,20 +43,24 @@ class MainActivity : ComponentActivity() {
         val now = System.currentTimeMillis()
         var uiState: WatchHintUiState = WatchHintUiState.Empty
 
+        // Phase 8: Demo mit Offline-Queueing und Online-Flush
         val events = listOf(
             StartProject(projectId = "demo-project", timestampUtcMillis = now),
             StartRecording(timestampUtcMillis = now + 1_000),
             CapturePhoto(markerId = "M1", timestampUtcMillis = now + 2_000),
-            // Phase 7: Mehrere Transcription-Chunks mit verschiedenen Typen
+            // Online-Transcriptions
             TranscriptionUpdated(chunkText = "Person: Dr. Mueller stellt sich vor", timestampUtcMillis = now + 5_000),
             TranscriptionUpdated(chunkText = "Thema: Statik und Tragwerksplanung", timestampUtcMillis = now + 10_000),
-            TranscriptionUpdated(chunkText = "Deckenhoehe messen und dokumentieren", timestampUtcMillis = now + 15_000),
+            // Netzwerk faellt aus
+            NetworkModeChanged(mode = NetworkMode.Offline, timestampUtcMillis = now + 12_000),
+            // Offline: Foto + Transcription werden gequeuet
+            CapturePhoto(markerId = "M2", timestampUtcMillis = now + 15_000),
+            TranscriptionUpdated(chunkText = "Deckenhoehe messen und dokumentieren", timestampUtcMillis = now + 18_000),
+            // Projekt abschliessen waehrend Offline -> Export gequeuet
             PauseRecording(timestampUtcMillis = now + 20_000),
-            NetworkModeChanged(mode = NetworkMode.Offline, timestampUtcMillis = now + 21_000),
-            // Stale-Transcription: 60s nach letztem Chunk (TTL=30s ueberschritten)
-            TranscriptionUpdated(chunkText = "Spaeter Nachtrag", timestampUtcMillis = now + 75_000),
-            ResumeRecording(timestampUtcMillis = now + 76_000),
-            FinishProject(timestampUtcMillis = now + 80_000)
+            FinishProject(timestampUtcMillis = now + 22_000),
+            // Netzwerk kehrt zurueck -> Queue wird geflusht
+            NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = now + 30_000)
         )
 
         val allWarnings = mutableListOf<String>()
@@ -96,14 +100,16 @@ class MainActivity : ComponentActivity() {
                                 ""
                         }
 
+                        val queueInfo = if (simState.hasPendingActions)
+                            " Q=${simState.pendingQueue.size}" else ""
                         val debugLines: List<String> = when (simState.lastNetworkMode) {
                             NetworkMode.Offline -> listOfNotNull(
-                                "Offline aktiv",
+                                "Offline aktiv$queueInfo",
                                 "Stage=${simState.stage} • Last=$lastEventLabel",
                                 hintLine.takeIf { it.isNotBlank() }
                             )
                             else -> listOfNotNull(
-                                "Stage=${simState.stage} • Net=${simState.lastNetworkMode}",
+                                "Stage=${simState.stage} • Net=${simState.lastNetworkMode}$queueInfo",
                                 "Last=$lastEventLabel",
                                 hintLine.takeIf { it.isNotBlank() }
                             )

@@ -13,8 +13,11 @@ data class SimulatorState(
     val hasTranscription: Boolean = false,
     val transcriptionChunkCount: Int = 0,
     val lastTranscriptionAtUtc: Long? = null,
+    val pendingQueue: List<QueuedAction> = emptyList(),
     val lastError: String? = null
 ) {
+    val hasPendingActions: Boolean get() = pendingQueue.isNotEmpty()
+
     /**
      * Prueft ob die letzte Transkription aelter als ttlMillis ist.
      * Gibt true zurueck wenn keine Transkription vorliegt oder TTL ueberschritten.

@@ -1,21 +1,20 @@
 # BrainPillar - Projektstatus
 
 ## Aktueller Stand
-Wear OS Smartwatch-App mit Architecture Simulator in Phase 7. TranscriptionUpdated emittiert jetzt echte Hints (PERSON/TOPIC/FALLBACK) mit Chunk-Parsing, Confidence-Labels und TTL/Stale-Logik. Adapter liefert generatedAtUtc. Demo-Workflow zeigt mehrere Transcription-Typen.
+Wear OS Smartwatch-App mit Architecture Simulator in Phase 8. Offline/Online/Hybrid-Logik mit Queueing implementiert: Aktionen (Foto-Upload, Transkript-Sync, Export) werden bei Offline gepuffert und bei Netzwerk-Rueckkehr automatisch geflusht. Queue-Anzeige im Debug-Overlay.
 
 ## Aktuelle Version / Phase
-Phase 7 (Erweiterte Transcription-Integration)
+Phase 8 (Offline/Online/Hybrid-Logik)
 
 ## Naechste geplante Stufe
-Phase 8 - Offline/Online/Hybrid-Logik (Blocking vs. Queueing)
+Phase 9 - Checklist & AI-Evaluation Events
 
 ## Offene Punkte
 - Unterschiedliche Hint-Templates pro HintType im UI
-- Testabdeckung erhoehen: Pause/Resume in falschen Stages, FinishProject in allen Stages
-- Offline/Online/Hybrid: Blockieren vs. Queueing domaenenlogisch modellieren
 - ChecklistRequested und AiEvaluationRequested Events noch nicht modelliert
 - Export-Pipeline und Retry-Logik ausstehend
 - Backend-Integration noch nicht begonnen
+- Debug/Logging Panopticor-Schnittstelle (geplant)
 
 ## Letzte Aenderung
 2026-03-25
