@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Aktion die bei Offline/Hybrid gepuffert wird und bei Netzwerk-Rueckkehr

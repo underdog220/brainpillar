@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Domain-only simulation engine.
@@ -664,4 +664,3 @@ class SimulatorEngine {
         )
     }
 }
-

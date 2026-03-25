@@ -19,25 +19,25 @@ import androidx.wear.compose.material3.MaterialTheme
 import com.brainpillar.watch.architecture.simulator.debug.SimulatorDebugOverlay
 import com.brainpillar.watch.feature.hints.model.WatchHintUiState
 import com.brainpillar.watch.feature.hints.ui.HintCardScreen
-import com.brainpillar.watch.architecture.simulator.CapturePhoto
-import com.brainpillar.watch.architecture.simulator.FinishProject
-import com.brainpillar.watch.architecture.simulator.PauseRecording
-import com.brainpillar.watch.architecture.simulator.ResumeRecording
-import com.brainpillar.watch.architecture.simulator.NetworkMode
-import com.brainpillar.watch.architecture.simulator.NetworkModeChanged
-import com.brainpillar.watch.architecture.simulator.SimulatorEngine
-import com.brainpillar.watch.architecture.simulator.SimulatorState
-import com.brainpillar.watch.architecture.simulator.StartProject
-import com.brainpillar.watch.architecture.simulator.StartRecording
-import com.brainpillar.watch.architecture.simulator.TranscriptionUpdated
-import com.brainpillar.watch.architecture.simulator.ChecklistRequested
-import com.brainpillar.watch.architecture.simulator.AiEvaluationRequested
-import com.brainpillar.watch.architecture.simulator.EvaluationType
-import com.brainpillar.watch.architecture.simulator.ExportStarted
-import com.brainpillar.watch.architecture.simulator.ExportFailed
-import com.brainpillar.watch.architecture.simulator.ExportRetry
-import com.brainpillar.watch.architecture.simulator.ExportCompleted
 import com.brainpillar.watch.architecture.simulator.adapter.SimulatorToWatchHintMapper
+import com.brainpillar.shared.simulator.CapturePhoto
+import com.brainpillar.shared.simulator.FinishProject
+import com.brainpillar.shared.simulator.PauseRecording
+import com.brainpillar.shared.simulator.ResumeRecording
+import com.brainpillar.shared.simulator.NetworkMode
+import com.brainpillar.shared.simulator.NetworkModeChanged
+import com.brainpillar.shared.simulator.SimulatorEngine
+import com.brainpillar.shared.simulator.SimulatorState
+import com.brainpillar.shared.simulator.StartProject
+import com.brainpillar.shared.simulator.StartRecording
+import com.brainpillar.shared.simulator.TranscriptionUpdated
+import com.brainpillar.shared.simulator.ChecklistRequested
+import com.brainpillar.shared.simulator.AiEvaluationRequested
+import com.brainpillar.shared.simulator.EvaluationType
+import com.brainpillar.shared.simulator.ExportStarted
+import com.brainpillar.shared.simulator.ExportFailed
+import com.brainpillar.shared.simulator.ExportRetry
+import com.brainpillar.shared.simulator.ExportCompleted
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {

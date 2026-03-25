@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Domain-only effects/outputs emitted by the simulator.
@@ -71,4 +71,3 @@ enum class SimulatorConfidenceLabel {
     PROBABLE,
     POSSIBLE
 }
-

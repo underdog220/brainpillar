@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 enum class SimulatorStage {
     Idle,
@@ -7,4 +7,3 @@ enum class SimulatorStage {
     Paused,
     Completed
 }
-

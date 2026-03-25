@@ -1,8 +1,7 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 enum class NetworkMode {
     Offline,
     Online,
     Hybrid
 }
-

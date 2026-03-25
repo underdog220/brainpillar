@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Transition result: new state + produced effects + diagnostics.
@@ -9,4 +9,3 @@ data class SimulationResult(
     val logs: List<String>,
     val warnings: List<String>
 )
-

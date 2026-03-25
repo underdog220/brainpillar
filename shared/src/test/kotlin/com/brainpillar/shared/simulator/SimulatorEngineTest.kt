@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -948,4 +948,3 @@ class SimulatorEngineTest {
         assertFalse((r1.effects + r2.effects).any { it is SimulatorEffect.EmitHint })
     }
 }
-

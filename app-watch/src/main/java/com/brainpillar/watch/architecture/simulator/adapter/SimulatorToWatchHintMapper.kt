@@ -1,9 +1,9 @@
 package com.brainpillar.watch.architecture.simulator.adapter
 
-import com.brainpillar.watch.architecture.simulator.SimulatorConfidenceLabel
-import com.brainpillar.watch.architecture.simulator.SimulatorEffect
-import com.brainpillar.watch.architecture.simulator.SimulatorHintType
-import com.brainpillar.watch.architecture.simulator.SimulatorState
+import com.brainpillar.shared.simulator.SimulatorConfidenceLabel
+import com.brainpillar.shared.simulator.SimulatorEffect
+import com.brainpillar.shared.simulator.SimulatorHintType
+import com.brainpillar.shared.simulator.SimulatorState
 import com.brainpillar.watch.feature.hints.model.ConfidenceLabel
 import com.brainpillar.watch.feature.hints.model.HintType
 import com.brainpillar.watch.feature.hints.model.WatchHintModel
@@ -61,4 +61,3 @@ object SimulatorToWatchHintMapper {
             SimulatorConfidenceLabel.POSSIBLE -> ConfidenceLabel.POSSIBLE
         }
 }
-

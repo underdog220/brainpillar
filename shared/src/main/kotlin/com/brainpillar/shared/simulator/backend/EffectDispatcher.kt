@@ -1,9 +1,9 @@
-package com.brainpillar.watch.architecture.simulator.backend
+package com.brainpillar.shared.simulator.backend
 
-import com.brainpillar.watch.architecture.simulator.QueuedAction
-import com.brainpillar.watch.architecture.simulator.QueuedActionType
-import com.brainpillar.watch.architecture.simulator.SimulatorEffect
-import com.brainpillar.watch.architecture.simulator.SimulatorState
+import com.brainpillar.shared.simulator.QueuedAction
+import com.brainpillar.shared.simulator.QueuedActionType
+import com.brainpillar.shared.simulator.SimulatorEffect
+import com.brainpillar.shared.simulator.SimulatorState
 
 /**
  * Uebersetzt Simulator-Effects in Backend-Aufrufe.

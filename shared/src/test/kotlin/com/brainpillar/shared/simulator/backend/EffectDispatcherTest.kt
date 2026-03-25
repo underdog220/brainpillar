@@ -1,6 +1,6 @@
-package com.brainpillar.watch.architecture.simulator.backend
+package com.brainpillar.shared.simulator.backend
 
-import com.brainpillar.watch.architecture.simulator.*
+import com.brainpillar.shared.simulator.*
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test

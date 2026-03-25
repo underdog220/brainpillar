@@ -18,4 +18,6 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "brainpillar"
+include(":shared")
 include(":app-watch")
+include(":app-phone")

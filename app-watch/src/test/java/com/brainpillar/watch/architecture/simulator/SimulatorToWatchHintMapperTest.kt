@@ -1,10 +1,11 @@
 package com.brainpillar.watch.architecture.simulator
 
 import com.brainpillar.watch.architecture.simulator.adapter.SimulatorToWatchHintMapper
-import com.brainpillar.watch.architecture.simulator.SimulatorConfidenceLabel
-import com.brainpillar.watch.architecture.simulator.SimulatorEffect
-import com.brainpillar.watch.architecture.simulator.SimulatorHintType
-import com.brainpillar.watch.architecture.simulator.SimulatorEffect.EmitHint
+import com.brainpillar.shared.simulator.SimulatorConfidenceLabel
+import com.brainpillar.shared.simulator.SimulatorEffect
+import com.brainpillar.shared.simulator.SimulatorHintType
+import com.brainpillar.shared.simulator.SimulatorEffect.EmitHint
+import com.brainpillar.shared.simulator.LogLevel
 import com.brainpillar.watch.feature.hints.model.ConfidenceLabel
 import com.brainpillar.watch.feature.hints.model.HintType
 import com.brainpillar.watch.feature.hints.model.WatchHintUiState
@@ -71,4 +72,3 @@ class SimulatorToWatchHintMapperTest {
         assertEquals(null, uiState.hint.subtitle)
     }
 }
-

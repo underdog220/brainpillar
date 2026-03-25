@@ -1,16 +1,19 @@
 # BrainPillar - Projektstatus
 
 ## Aktueller Stand
-Wear OS Smartwatch-App mit Architecture Simulator in Phase 11. Backend-Integration als saubere Schichtenarchitektur: BackendClient-Interface, StubBackendClient (Tests/Demo), EffectDispatcher (Effect->Backend Mapping), API-Modelle (Export/Sync/Upload/Evaluation). Alle Phasen 1-11 abgeschlossen.
+Multi-Modul Projekt mit shared Kotlin-JVM-Modul (Domain-Logik), Wear OS App und Phone Companion App. Simulator-Core (Engine, State, Events, Effects, Backend) vollstaendig in shared-Modul extrahiert. Beide Apps nutzen shared-Modul als Dependency. Alle Tests bestehen.
 
 ## Aktuelle Version / Phase
-Phase 11 (Backend-Integration) - Alle Kern-Phasen abgeschlossen
+Shared-Modul v1.0.0 - Domain-Logik extrahiert und integriert
 
 ## Naechste geplante Stufe
-Phase 12 (optional) - HttpBackendClient (echte HTTP-Aufrufe), Unterschiedliche Hint-Templates, Panopticor-Logging
+- Phone App: Demo-Daten durch shared-Modul Anbindung ersetzen
+- HttpBackendClient (echte HTTP-Aufrufe)
+- Unterschiedliche Hint-Templates, Panopticor-Logging
 
 ## Offene Punkte
-- HttpBackendClient: Echte HTTP-Implementierung (Android-Modul, OkHttp/Ktor)
+- Phone App: Demo-Daten durch shared-Modul Anbindung ersetzen
+- HttpBackendClient: Echte HTTP-Implementierung (OkHttp/Ktor)
 - Unterschiedliche Hint-Templates pro HintType im UI
 - Debug/Logging Panopticor-Schnittstelle (geplant)
 

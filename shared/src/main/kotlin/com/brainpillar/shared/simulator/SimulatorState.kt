@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Domain-only simulation state.
@@ -31,4 +31,3 @@ data class SimulatorState(
         return (currentTimeUtcMillis - lastAt) > ttlMillis
     }
 }
-

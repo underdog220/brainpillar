@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator.backend
+package com.brainpillar.shared.simulator.backend
 
 /**
  * Stub-Implementierung fuer Tests und Demo.

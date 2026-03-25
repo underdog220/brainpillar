@@ -1,4 +1,4 @@
-package com.brainpillar.watch.architecture.simulator
+package com.brainpillar.shared.simulator
 
 /**
  * Domain-only simulation events.
@@ -100,4 +100,3 @@ enum class EvaluationType {
     /** Zusammenfassung des Projekts */
     SUMMARY
 }
-
