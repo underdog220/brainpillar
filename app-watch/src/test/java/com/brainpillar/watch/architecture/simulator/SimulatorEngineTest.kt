@@ -742,6 +742,196 @@ class SimulatorEngineTest {
         assertEquals(2, state.photoCount)
     }
 
+    // ===== Phase 10: Export-Pipeline & Retry Tests =====
+
+    private fun completedOnlineState() = SimulatorState(
+        stage = SimulatorStage.Completed,
+        projectId = "p1",
+        lastNetworkMode = NetworkMode.Online
+    )
+
+    @Test
+    fun exportStarted_inCompleted_online_startsExport() {
+        val result = engine.transition(completedOnlineState(), ExportStarted(1000L))
+
+        assertEquals(ExportStatus.EXPORTING, result.newState.exportState.status)
+        assertTrue(result.effects.any { it is SimulatorEffect.ExportInProgress })
+        val hint = result.effects.filterIsInstance<SimulatorEffect.EmitHint>().single()
+        assertTrue(hint.subtitle!!.contains("hochgeladen"))
+    }
+
+    @Test
+    fun exportStarted_notCompleted_isInvalid() {
+        val state = SimulatorState(stage = SimulatorStage.RecordingActive, isRecording = true)
+        val result = engine.transition(state, ExportStarted(1000L))
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.ExportInProgress })
+    }
+
+    @Test
+    fun exportStarted_offline_isBlocked() {
+        val state = completedOnlineState().copy(lastNetworkMode = NetworkMode.Offline)
+        val result = engine.transition(state, ExportStarted(1000L))
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.ExportInProgress })
+    }
+
+    @Test
+    fun exportCompleted_afterExporting_succeeds() {
+        val state = completedOnlineState().copy(
+            exportState = ExportState(status = ExportStatus.EXPORTING)
+        )
+
+        val result = engine.transition(state, ExportCompleted(2000L))
+
+        assertEquals(ExportStatus.COMPLETED, result.newState.exportState.status)
+        assertTrue(result.effects.any { it is SimulatorEffect.ExportDone })
+    }
+
+    @Test
+    fun exportCompleted_withoutExporting_isInvalid() {
+        val result = engine.transition(completedOnlineState(), ExportCompleted(1000L))
+        assertTrue(result.warnings.isNotEmpty())
+        assertFalse(result.effects.any { it is SimulatorEffect.ExportDone })
+    }
+
+    @Test
+    fun exportFailed_retryable_schedulesRetry() {
+        val state = completedOnlineState().copy(
+            exportState = ExportState(status = ExportStatus.EXPORTING)
+        )
+
+        val result = engine.transition(
+            state, ExportFailed(reason = "Timeout", isRetryable = true, timestampUtcMillis = 2000L)
+        )
+
+        assertEquals(ExportStatus.RETRY_SCHEDULED, result.newState.exportState.status)
+        assertEquals(1, result.newState.exportState.retryCount)
+        assertEquals("Timeout", result.newState.exportState.lastFailureReason)
+        val retry = result.effects.filterIsInstance<SimulatorEffect.ScheduleRetry>().single()
+        assertEquals(2, retry.attempt)
+        assertTrue(retry.delayMs > 0)
+    }
+
+    @Test
+    fun exportFailed_notRetryable_failsPermanent() {
+        val state = completedOnlineState().copy(
+            exportState = ExportState(status = ExportStatus.EXPORTING)
+        )
+
+        val result = engine.transition(
+            state, ExportFailed(reason = "Auth error", isRetryable = false, timestampUtcMillis = 2000L)
+        )
+
+        assertEquals(ExportStatus.FAILED_PERMANENT, result.newState.exportState.status)
+        assertTrue(result.effects.any { it is SimulatorEffect.ExportAborted })
+    }
+
+    @Test
+    fun exportFailed_maxRetriesReached_failsPermanent() {
+        val state = completedOnlineState().copy(
+            exportState = ExportState(
+                status = ExportStatus.EXPORTING,
+                retryCount = ExportState.MAX_RETRIES - 1
+            )
+        )
+
+        val result = engine.transition(
+            state, ExportFailed(reason = "Timeout", isRetryable = true, timestampUtcMillis = 2000L)
+        )
+
+        assertEquals(ExportStatus.FAILED_PERMANENT, result.newState.exportState.status)
+        assertTrue(result.effects.any { it is SimulatorEffect.ExportAborted })
+    }
+
+    @Test
+    fun exportRetry_online_restartsExport() {
+        val state = completedOnlineState().copy(
+            exportState = ExportState(
+                status = ExportStatus.RETRY_SCHEDULED,
+                retryCount = 1
+            )
+        )
+
+        val result = engine.transition(state, ExportRetry(3000L))
+
+        assertEquals(ExportStatus.EXPORTING, result.newState.exportState.status)
+        assertTrue(result.effects.any { it is SimulatorEffect.ExportInProgress })
+    }
+
+    @Test
+    fun exportRetry_offline_postponesRetry() {
+        val state = completedOnlineState().copy(
+            lastNetworkMode = NetworkMode.Offline,
+            exportState = ExportState(
+                status = ExportStatus.RETRY_SCHEDULED,
+                retryCount = 1
+            )
+        )
+
+        val result = engine.transition(state, ExportRetry(3000L))
+
+        assertEquals(ExportStatus.RETRY_SCHEDULED, result.newState.exportState.status)
+        assertTrue(result.warnings.isNotEmpty())
+    }
+
+    @Test
+    fun exportRetry_withoutScheduledRetry_isInvalid() {
+        val result = engine.transition(completedOnlineState(), ExportRetry(1000L))
+        assertTrue(result.warnings.isNotEmpty())
+    }
+
+    @Test
+    fun fullExportPipeline_startFailRetrySucceed() {
+        var state = completedOnlineState()
+
+        // Start
+        val r1 = engine.transition(state, ExportStarted(1000L))
+        state = r1.newState
+        assertEquals(ExportStatus.EXPORTING, state.exportState.status)
+
+        // Fail
+        val r2 = engine.transition(state, ExportFailed("Timeout", true, 2000L))
+        state = r2.newState
+        assertEquals(ExportStatus.RETRY_SCHEDULED, state.exportState.status)
+        assertEquals(1, state.exportState.retryCount)
+
+        // Retry
+        val r3 = engine.transition(state, ExportRetry(12_000L))
+        state = r3.newState
+        assertEquals(ExportStatus.EXPORTING, state.exportState.status)
+
+        // Succeed
+        val r4 = engine.transition(state, ExportCompleted(13_000L))
+        state = r4.newState
+        assertEquals(ExportStatus.COMPLETED, state.exportState.status)
+        assertTrue(state.exportState.isTerminal)
+    }
+
+    @Test
+    fun exportState_exponentialBackoff() {
+        val e0 = ExportState(retryCount = 0)
+        val e1 = ExportState(retryCount = 1)
+        val e2 = ExportState(retryCount = 2)
+
+        assertEquals(ExportState.BASE_RETRY_DELAY_MS * 1, e0.nextRetryDelayMs())
+        assertEquals(ExportState.BASE_RETRY_DELAY_MS * 2, e1.nextRetryDelayMs())
+        assertEquals(ExportState.BASE_RETRY_DELAY_MS * 4, e2.nextRetryDelayMs())
+    }
+
+    @Test
+    fun startProject_resetsExportState() {
+        val state = SimulatorState(
+            stage = SimulatorStage.Idle,
+            exportState = ExportState(status = ExportStatus.COMPLETED, retryCount = 2)
+        )
+
+        val result = engine.transition(state, StartProject("p2", 1000L))
+
+        assertEquals(ExportStatus.IDLE, result.newState.exportState.status)
+        assertEquals(0, result.newState.exportState.retryCount)
+    }
+
     @Test
     fun multipleInvalidEvents_accumulateWarningsInCaller() {
         val initial = SimulatorState(stage = SimulatorStage.Idle)

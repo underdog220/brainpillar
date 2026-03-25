@@ -17,6 +17,7 @@ data class SimulatorState(
     val lastChecklistId: String? = null,
     val lastEvaluationType: EvaluationType? = null,
     val photoCount: Int = 0,
+    val exportState: ExportState = ExportState(),
     val lastError: String? = null
 ) {
     val hasPendingActions: Boolean get() = pendingQueue.isNotEmpty()

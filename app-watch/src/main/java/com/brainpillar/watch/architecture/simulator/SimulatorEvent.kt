@@ -62,6 +62,36 @@ data class AiEvaluationRequested(
     override val timestampUtcMillis: Long
 ) : SimulatorEvent
 
+/**
+ * Export manuell starten oder nach Queue-Flush automatisch.
+ */
+data class ExportStarted(
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
+/**
+ * Export erfolgreich abgeschlossen.
+ */
+data class ExportCompleted(
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
+/**
+ * Export fehlgeschlagen. Engine entscheidet ob Retry moeglich.
+ */
+data class ExportFailed(
+    val reason: String,
+    val isRetryable: Boolean = true,
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
+/**
+ * Retry eines fehlgeschlagenen Exports ausfuehren.
+ */
+data class ExportRetry(
+    override val timestampUtcMillis: Long
+) : SimulatorEvent
+
 enum class EvaluationType {
     /** Qualitaetsbewertung der Aufnahme/Dokumentation */
     QUALITY,

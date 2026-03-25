@@ -33,6 +33,10 @@ import com.brainpillar.watch.architecture.simulator.TranscriptionUpdated
 import com.brainpillar.watch.architecture.simulator.ChecklistRequested
 import com.brainpillar.watch.architecture.simulator.AiEvaluationRequested
 import com.brainpillar.watch.architecture.simulator.EvaluationType
+import com.brainpillar.watch.architecture.simulator.ExportStarted
+import com.brainpillar.watch.architecture.simulator.ExportFailed
+import com.brainpillar.watch.architecture.simulator.ExportRetry
+import com.brainpillar.watch.architecture.simulator.ExportCompleted
 import com.brainpillar.watch.architecture.simulator.adapter.SimulatorToWatchHintMapper
 
 class MainActivity : ComponentActivity() {
@@ -65,8 +69,13 @@ class MainActivity : ComponentActivity() {
             FinishProject(timestampUtcMillis = now + 22_000),
             // Netzwerk kehrt zurueck -> Queue wird geflusht
             NetworkModeChanged(mode = NetworkMode.Online, timestampUtcMillis = now + 30_000),
-            // Phase 9: KI-Bewertung nach Abschluss (online)
-            AiEvaluationRequested(evaluationType = EvaluationType.QUALITY, timestampUtcMillis = now + 32_000)
+            // Phase 10: Export-Pipeline mit Retry
+            ExportStarted(timestampUtcMillis = now + 31_000),
+            ExportFailed(reason = "Timeout", isRetryable = true, timestampUtcMillis = now + 33_000),
+            ExportRetry(timestampUtcMillis = now + 43_000),
+            ExportCompleted(timestampUtcMillis = now + 45_000),
+            // KI-Bewertung nach erfolgreichem Export
+            AiEvaluationRequested(evaluationType = EvaluationType.QUALITY, timestampUtcMillis = now + 47_000)
         )
 
         val allWarnings = mutableListOf<String>()

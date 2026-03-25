@@ -52,7 +52,8 @@ class SimulatorEngine {
         ChecklistItem("Transkription vorhanden", state.hasTranscription),
         ChecklistItem("Mindestens 3 Chunks", state.transcriptionChunkCount >= 3),
         ChecklistItem("Projekt abgeschlossen", state.stage == SimulatorStage.Completed),
-        ChecklistItem("Alle Uploads synchronisiert", !state.hasPendingActions)
+        ChecklistItem("Alle Uploads synchronisiert", !state.hasPendingActions),
+        ChecklistItem("Export erfolgreich", state.exportState.status == ExportStatus.COMPLETED)
     )
 
     /**
@@ -127,6 +128,7 @@ class SimulatorEngine {
                         lastChecklistId = null,
                         lastEvaluationType = null,
                         photoCount = 0,
+                        exportState = ExportState(),
                         lastError = null
                     )
                 }
@@ -443,6 +445,158 @@ class SimulatorEngine {
                     SimulatorStage.Idle -> {
                         warn("ChecklistRequested is not allowed in stage=$currentStage")
                         state
+                    }
+                }
+            }
+
+            is ExportStarted -> {
+                when {
+                    currentStage != SimulatorStage.Completed -> {
+                        warn("ExportStarted is not allowed in stage=$currentStage")
+                        state
+                    }
+                    state.exportState.status == ExportStatus.EXPORTING -> {
+                        warn("Export laeuft bereits")
+                        state
+                    }
+                    state.exportState.isTerminal -> {
+                        warn("Export bereits abgeschlossen oder endgueltig fehlgeschlagen")
+                        state
+                    }
+                    state.lastNetworkMode == NetworkMode.Offline -> {
+                        warn("Export nicht moeglich: Offline")
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Export",
+                            subtitle = "Offline - nicht moeglich",
+                            isStale = true
+                        )
+                        state.copy(lastError = "Export requires network")
+                    }
+                    else -> {
+                        log(LogLevel.INFO, "Export started for project: ${state.projectId}")
+                        effects += SimulatorEffect.ExportInProgress(state.projectId ?: "")
+                        emitHint(
+                            hintType = SimulatorHintType.FALLBACK,
+                            title = "Export",
+                            subtitle = "Wird hochgeladen..."
+                        )
+                        state.copy(
+                            exportState = state.exportState.copy(
+                                status = ExportStatus.EXPORTING,
+                                lastAttemptAtUtc = event.timestampUtcMillis
+                            ),
+                            lastError = null
+                        )
+                    }
+                }
+            }
+
+            is ExportCompleted -> {
+                if (state.exportState.status != ExportStatus.EXPORTING) {
+                    warn("ExportCompleted ohne laufenden Export")
+                    state
+                } else {
+                    log(LogLevel.INFO, "Export completed successfully")
+                    effects += SimulatorEffect.ExportDone(state.projectId ?: "")
+                    emitHint(
+                        hintType = SimulatorHintType.FALLBACK,
+                        title = "Export fertig",
+                        subtitle = "Erfolgreich hochgeladen"
+                    )
+                    state.copy(
+                        exportState = state.exportState.copy(
+                            status = ExportStatus.COMPLETED,
+                            lastFailureReason = null
+                        ),
+                        lastError = null
+                    )
+                }
+            }
+
+            is ExportFailed -> {
+                if (state.exportState.status != ExportStatus.EXPORTING) {
+                    warn("ExportFailed ohne laufenden Export")
+                    state
+                } else {
+                    val newRetryCount = state.exportState.retryCount + 1
+                    log(LogLevel.WARN, "Export failed: ${event.reason} (attempt $newRetryCount)")
+
+                    if (event.isRetryable && newRetryCount < ExportState.MAX_RETRIES) {
+                        // Retry planen
+                        val updatedExport = state.exportState.copy(
+                            status = ExportStatus.RETRY_SCHEDULED,
+                            retryCount = newRetryCount,
+                            lastFailureReason = event.reason
+                        )
+                        val delayMs = updatedExport.nextRetryDelayMs()
+                        effects += SimulatorEffect.ScheduleRetry(
+                            delayMs = delayMs,
+                            attempt = newRetryCount + 1
+                        )
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Export fehlgeschlagen",
+                            subtitle = "Retry #${newRetryCount + 1} in ${delayMs / 1000}s"
+                        )
+                        state.copy(
+                            exportState = updatedExport,
+                            lastError = event.reason
+                        )
+                    } else {
+                        // Endgueltig fehlgeschlagen
+                        effects += SimulatorEffect.ExportAborted(
+                            reason = event.reason,
+                            attempts = newRetryCount
+                        )
+                        emitHint(
+                            hintType = SimulatorHintType.FALLBACK,
+                            title = "Export abgebrochen",
+                            subtitle = "Nach $newRetryCount Versuchen: ${event.reason}",
+                            isStale = true
+                        )
+                        state.copy(
+                            exportState = state.exportState.copy(
+                                status = ExportStatus.FAILED_PERMANENT,
+                                retryCount = newRetryCount,
+                                lastFailureReason = event.reason
+                            ),
+                            lastError = event.reason
+                        )
+                    }
+                }
+            }
+
+            is ExportRetry -> {
+                when {
+                    state.exportState.status != ExportStatus.RETRY_SCHEDULED -> {
+                        warn("ExportRetry ohne geplanten Retry")
+                        state
+                    }
+                    state.lastNetworkMode == NetworkMode.Offline -> {
+                        warn("ExportRetry nicht moeglich: Offline")
+                        emitHint(
+                            hintType = SimulatorHintType.REMINDER,
+                            title = "Retry verschoben",
+                            subtitle = "Warte auf Netzwerk"
+                        )
+                        state.copy(lastError = "Retry postponed: offline")
+                    }
+                    else -> {
+                        log(LogLevel.INFO, "Export retry #${state.exportState.retryCount + 1}")
+                        effects += SimulatorEffect.ExportInProgress(state.projectId ?: "")
+                        emitHint(
+                            hintType = SimulatorHintType.FALLBACK,
+                            title = "Export Retry",
+                            subtitle = "Versuch #${state.exportState.retryCount + 1}..."
+                        )
+                        state.copy(
+                            exportState = state.exportState.copy(
+                                status = ExportStatus.EXPORTING,
+                                lastAttemptAtUtc = event.timestampUtcMillis
+                            ),
+                            lastError = null
+                        )
                     }
                 }
             }

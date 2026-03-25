@@ -34,6 +34,18 @@ sealed interface SimulatorEffect {
         val evaluationType: EvaluationType,
         val contextSummary: String
     ) : SimulatorEffect
+
+    /** Export-Pipeline gestartet */
+    data class ExportInProgress(val projectId: String) : SimulatorEffect
+
+    /** Export erfolgreich */
+    data class ExportDone(val projectId: String) : SimulatorEffect
+
+    /** Retry geplant mit Verzoegerung */
+    data class ScheduleRetry(val delayMs: Long, val attempt: Int) : SimulatorEffect
+
+    /** Export endgueltig fehlgeschlagen */
+    data class ExportAborted(val reason: String, val attempts: Int) : SimulatorEffect
 }
 
 data class ChecklistItem(
