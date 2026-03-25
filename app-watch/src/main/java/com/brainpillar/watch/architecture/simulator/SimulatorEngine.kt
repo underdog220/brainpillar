@@ -6,6 +6,42 @@ package com.brainpillar.watch.architecture.simulator
  */
 class SimulatorEngine {
 
+    companion object {
+        /** TTL fuer Transcription-Hints in Sekunden */
+        const val TRANSCRIPTION_HINT_TTL_SEC = 30
+    }
+
+    /**
+     * Simuliert Chunk-Parsing: erkennt Praefix-basiert Person/Thema,
+     * sonst Fallback. In spaeterer Phase durch echtes NLP ersetzt.
+     */
+    private data class ParsedChunk(
+        val hintType: SimulatorHintType,
+        val title: String,
+        val subtitle: String?
+    )
+
+    private fun parseTranscriptionChunk(chunkText: String): ParsedChunk {
+        val trimmed = chunkText.trim()
+        return when {
+            trimmed.startsWith("Person:", ignoreCase = true) -> ParsedChunk(
+                hintType = SimulatorHintType.PERSON,
+                title = trimmed.removePrefix("Person:").trim().take(30).ifBlank { "Erkannt" },
+                subtitle = "Person erkannt"
+            )
+            trimmed.startsWith("Thema:", ignoreCase = true) -> ParsedChunk(
+                hintType = SimulatorHintType.TOPIC,
+                title = trimmed.removePrefix("Thema:").trim().take(30).ifBlank { "Neues Thema" },
+                subtitle = "Thema erkannt"
+            )
+            else -> ParsedChunk(
+                hintType = SimulatorHintType.FALLBACK,
+                title = "Transkript",
+                subtitle = trimmed.take(40).let { if (trimmed.length > 40) "$it..." else it }
+            )
+        }
+    }
+
     fun transition(state: SimulatorState, event: SimulatorEvent): SimulationResult {
         val effects = mutableListOf<SimulatorEffect>()
         val logs = mutableListOf<String>()
@@ -58,6 +94,8 @@ class SimulatorEngine {
                         isRecording = false,
                         lastPhotoMarkerId = null,
                         hasTranscription = false,
+                        transcriptionChunkCount = 0,
+                        lastTranscriptionAtUtc = null,
                         lastError = null
                     )
                 }
@@ -206,13 +244,31 @@ class SimulatorEngine {
             }
 
             is TranscriptionUpdated -> {
-                // Not used yet for state changes, but supported by the API for later phases.
                 when (currentStage) {
                     SimulatorStage.RecordingActive,
                     SimulatorStage.Paused -> {
-                        log(LogLevel.DEBUG, "Transcription updated (len=${event.chunkText.length})")
+                        val chunkCount = state.transcriptionChunkCount + 1
+                        val isStale = state.isTranscriptionStale(event.timestampUtcMillis)
+                        log(LogLevel.DEBUG, "Transcription updated (len=${event.chunkText.length}, chunk=#$chunkCount)")
+
+                        // Hint-Typ aus Chunk-Inhalt ableiten (simuliert)
+                        val parsed = parseTranscriptionChunk(event.chunkText)
+                        val confidence = if (event.chunkText.length >= 20)
+                            SimulatorConfidenceLabel.PROBABLE else SimulatorConfidenceLabel.POSSIBLE
+
+                        emitHint(
+                            hintType = parsed.hintType,
+                            title = parsed.title,
+                            subtitle = parsed.subtitle,
+                            confidenceLabel = confidence,
+                            isStale = isStale,
+                            ttlSec = TRANSCRIPTION_HINT_TTL_SEC
+                        )
+
                         state.copy(
                             hasTranscription = true,
+                            transcriptionChunkCount = chunkCount,
+                            lastTranscriptionAtUtc = event.timestampUtcMillis,
                             lastError = null
                         )
                     }

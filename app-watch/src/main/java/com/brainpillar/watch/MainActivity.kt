@@ -45,13 +45,18 @@ class MainActivity : ComponentActivity() {
 
         val events = listOf(
             StartProject(projectId = "demo-project", timestampUtcMillis = now),
-            StartRecording(timestampUtcMillis = now + 1),
-            CapturePhoto(markerId = "M1", timestampUtcMillis = now + 2),
-            PauseRecording(timestampUtcMillis = now + 3),
-            NetworkModeChanged(mode = NetworkMode.Offline, timestampUtcMillis = now + 3),
-            TranscriptionUpdated(chunkText = "Kurzer Transkript-Chunk", timestampUtcMillis = now + 4),
-            ResumeRecording(timestampUtcMillis = now + 4),
-            FinishProject(timestampUtcMillis = now + 5)
+            StartRecording(timestampUtcMillis = now + 1_000),
+            CapturePhoto(markerId = "M1", timestampUtcMillis = now + 2_000),
+            // Phase 7: Mehrere Transcription-Chunks mit verschiedenen Typen
+            TranscriptionUpdated(chunkText = "Person: Dr. Mueller stellt sich vor", timestampUtcMillis = now + 5_000),
+            TranscriptionUpdated(chunkText = "Thema: Statik und Tragwerksplanung", timestampUtcMillis = now + 10_000),
+            TranscriptionUpdated(chunkText = "Deckenhoehe messen und dokumentieren", timestampUtcMillis = now + 15_000),
+            PauseRecording(timestampUtcMillis = now + 20_000),
+            NetworkModeChanged(mode = NetworkMode.Offline, timestampUtcMillis = now + 21_000),
+            // Stale-Transcription: 60s nach letztem Chunk (TTL=30s ueberschritten)
+            TranscriptionUpdated(chunkText = "Spaeter Nachtrag", timestampUtcMillis = now + 75_000),
+            ResumeRecording(timestampUtcMillis = now + 76_000),
+            FinishProject(timestampUtcMillis = now + 80_000)
         )
 
         val allWarnings = mutableListOf<String>()
@@ -61,7 +66,7 @@ class MainActivity : ComponentActivity() {
             lastEventLabel = event::class.simpleName ?: "Event"
             val result = engine.transition(simState, event)
             simState = result.newState
-            uiState = SimulatorToWatchHintMapper.effectsToUiState(result.effects)
+            uiState = SimulatorToWatchHintMapper.effectsToUiState(result.effects, simState)
             allWarnings += result.warnings
         }
 

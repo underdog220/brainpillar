@@ -12,3 +12,4 @@
 [Phase 6.1] TranscriptionUpdated setzt hasTranscription=true, FinishProject-Hinweis dynamisch abhaengig von lastNetworkMode und hasTranscription
 [Phase 6.2] Debug-Overlay: Bei Offline dauerhaft "Offline aktiv" in Zeile 1, Stage+Last in Zeile 2 zusammengefasst (max 3 Zeilen)
 [2026-03-24] PROJEKT_STATUS.md, MASSNAHMEN.md, ARCHITEKTUR.md angelegt (Pflichtstruktur)
+[2026-03-25] [Phase 7] Erweiterte Transcription-Integration: SimulatorState um transcriptionChunkCount/lastTranscriptionAtUtc/isTranscriptionStale erweitert, TranscriptionUpdated emittiert Hints (Person/Thema/Fallback via Chunk-Parsing), Confidence-Labels (PROBABLE/POSSIBLE nach Chunk-Laenge), TTL/Stale-Logik (30s), Adapter liefert generatedAtUtc, Demo-Workflow mit 4 Transcription-Chunks, 10 neue Unit-Tests
