@@ -16,8 +16,15 @@ brainpillar/
 │       │       ├── SimulationResult.kt
 │       │       ├── SimulatorEngine.kt  # State Machine
 │       │       ├── NetworkMode.kt
+│       │       ├── QueuedAction.kt
+│       │       ├── ExportState.kt
 │       │       ├── adapter/
 │       │       │   └── SimulatorToWatchHintMapper.kt
+│       │       ├── backend/
+│       │       │   ├── BackendModels.kt       # API Request/Response
+│       │       │   ├── BackendClient.kt       # Interface + Config
+│       │       │   ├── StubBackendClient.kt   # Test/Demo Stub
+│       │       │   └── EffectDispatcher.kt    # Effect->Backend Mapping
 │       │       └── debug/
 │       │           └── SimulatorDebugOverlay.kt
 │       └── feature/
@@ -67,3 +74,15 @@ Ungueltige Zustandsuebergaenge erzeugen Warnings statt Exceptions. Die App bleib
 
 ### 6. Phasenweise Entwicklung
 Feature-Entwicklung folgt einem klaren Phasenplan (Analyse -> Design -> Core -> Demo -> Tests -> Debug -> Erweiterung).
+
+### 7. Backend-Integration via EffectDispatcher
+```
+SimulatorEngine.transition()
+   -> SimulatorEffect (ExportInProgress, FlushQueue, AiEvaluationTriggered, ...)
+      -> EffectDispatcher.dispatch()
+         -> BackendClient (Interface)
+            -> StubBackendClient (Tests/Demo)
+            -> HttpBackendClient (spaeter: echte HTTP-Aufrufe)
+         -> DispatchResult (Success/Error pro Aktion)
+```
+Saubere Trennung: Engine kennt kein Backend, Dispatcher kennt keine UI.
